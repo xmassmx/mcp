@@ -1,3 +1,6 @@
+from typing import List, Dict, Any, Union
+import gradio as gr
+from gradio.components.chatbot import ChatMessage
 import json
 import os
 import asyncio
@@ -15,14 +18,31 @@ load_dotenv()  # load environment variables from .env
 MODEL = os.getenv("MODEL")
 
 print(MODEL)
+loop = asyncio.new_event_loop()
 
 class MCPClient:
     def __init__(self):
         # Initialize session and client objects
         self.session: Optional[ClientSession] = None
         self.exit_stack = AsyncExitStack()
-        self.client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-    # methods will go here
+        self.client = None  # Will be initialized when API key is set
+        self.api_key = os.getenv("GROQ_API_KEY")
+
+    def set_api_key(self, api_key: str):
+        """Set the Groq API key and initialize the client"""
+        self.api_key = api_key
+        self.client = Groq(api_key=api_key)
+        return "API key set successfully"
+
+    def get_api_key_status(self) -> str:
+        """Return the status of the API key"""
+        if self.api_key:
+            return "API key is set"
+        return "API key is not set"
+
+    def connect(self, server_script_path: str):
+        return loop.run_until_complete(self.connect_to_server(server_script_path))
+ 
     async def connect_to_server(self, server_script_path: str):
         """Connect to an MCP server
 
@@ -52,18 +72,50 @@ class MCPClient:
         tools = response.tools
         print("\nConnected to server with tools:", [tool.name for tool in tools])
     
-    async def process_query(self, query: str) -> str:
-        """Process a query using Claude and available tools"""
-        messages = [
-            {
+
+    def process_message(self, message: str, history: List[Union[Dict[str, Any], ChatMessage]]) -> tuple:
+        if not self.client:
+            return history + [
+                {"role": "user", "content": message}, 
+                {"role": "assistant", "content": "Please set your Groq API key first."}
+            ], gr.Textbox(value="")
+            
+        if not self.session:
+            return history + [
+                {"role": "user", "content": message}, 
+                {"role": "assistant", "content": "Please connect to an MCP server first."}
+            ], gr.Textbox(value="")
+        
+        new_messages = loop.run_until_complete(self._process_query(message, history))
+        return history + [{"role": "user", "content": message}] + new_messages, gr.Textbox(value="")
+
+    async def _process_query(self, message: str, history: List[Union[Dict[str, Any], ChatMessage]]):
+        model_messages = []
+        # Add system prompt
+        model_messages.append({
             "role": "system",
-            "content": "You are an assistant that can respond to the user queries and if required, use the get_alerts and get_forecast tools."
-            },
-            {
-                "role": "user",
-                "content": query
-            }
-        ]
+            "content": "You are an assistant that can respond to the user queries and if required, use the available tools to help answer questions."
+        })
+        for msg in history:
+            if isinstance(msg, ChatMessage):
+                role, content = msg.role, msg.content
+            else:
+                role, content = msg.get("role"), msg.get("content")
+            
+            if role in ["user", "assistant", "system"]:
+                model_messages.append({"role": role, "content": content})
+        
+        model_messages.append({"role": "user", "content": message})
+        # messages = [
+        #     {
+        #     "role": "system",
+        #     "content": "You are an assistant that can respond to the user queries and if required, use the get_alerts and get_forecast tools."
+        #     },
+        #     {
+        #         "role": "user",
+        #         "content": query
+        #     }
+        # ]
 
         response = await self.session.list_tools()
         available_tools = [{
@@ -77,7 +129,7 @@ class MCPClient:
         # # Initial Claude API call
         response = self.client.chat.completions.create(
         model=MODEL, # LLM to use
-        messages=messages, # Conversation history
+        messages=model_messages, # Conversation history
         stream=False,
         tools=available_tools, # Available tools (i.e. functions) for our LLM to use
         tool_choice="auto", # Let our LLM decide when to use tools
@@ -88,18 +140,57 @@ class MCPClient:
             # Extract the response and any tool call responses
         response_message = response.choices[0].message
         tool_calls = response_message.tool_calls
-        print(f"response_messageyy: {response_message}")
+        result_messages = []
+
+        # print(f"response_messageyy: {response_message}")
         if tool_calls:
             print("\n\n")
-            print(f"messages: {messages}")
-            messages.append(response_message)
+            print(f"messages: {model_messages}")
+            model_messages.append(response_message)
             for tool_call in tool_calls:
                 function_name = tool_call.function.name
                 function_args = json.loads(tool_call.function.arguments)
                 # Call the tool and get the response
+                result_messages.append({
+                    "role": "assistant",
+                    "content": f"I'll use the {function_name} tool to help answer your question.",
+                    "metadata": {
+                        "title": f"Using tool: {function_name}",
+                        "log": f"Parameters: {json.dumps(function_args, ensure_ascii=True)}",
+                        "status": "pending",
+                        "id": f"tool_call_{function_name}"
+                    }
+                })
+                
+                result_messages.append({
+                    "role": "assistant",
+                    "content": "```json\n" + json.dumps(function_args, indent=2, ensure_ascii=True) + "\n```",
+                    "metadata": {
+                        "parent_id": f"tool_call_{function_name}",
+                        "id": f"params_{function_name}",
+                        "title": "Tool Parameters"
+                    }
+                })
                 result = await self.session.call_tool(function_name, function_args)
+
+                if result_messages and "metadata" in result_messages[-2]:
+                    result_messages[-2]["metadata"]["status"] = "done"
+                
+                result_messages.append({
+                    "role": "assistant",
+                    "content": "Here are the results from the tool:",
+                    "metadata": {
+                        "title": f"Tool Result for {function_name}",
+                        "status": "done",
+                        "id": f"result_{function_name}"
+                    }
+                })
+
+                result_content = result.content
+                if isinstance(result_content, list):
+                    result_content = "\n".join(str(item) for item in result_content)
                 # Add the tool response to the conversation
-                messages.append(
+                model_messages.append(
                     {
                         "tool_call_id": tool_call.id, 
                         "role": "tool", # Indicates this message is from tool use
@@ -110,11 +201,20 @@ class MCPClient:
             # Make a second API call with the updated conversation
             second_response = self.client.chat.completions.create(
                 model=MODEL,
-                messages=messages
+                messages=model_messages
             )
+            result_messages.append({
+                "role": "assistant",
+                "content": second_response.choices[0].message.content
+            })
             # Return the final response
-            return second_response.choices[0].message.content
-        return response_message.content
+            return result_messages
+        
+        result_messages.append({
+                    "role": "assistant", 
+                    "content": response_message.content
+                })
+        return result_messages
 
         
 
