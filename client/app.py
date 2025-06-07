@@ -27,7 +27,7 @@ def gradio_interface():
                 server_path = gr.Textbox(
                     label="Server Script Path",
                     placeholder="Enter path to server script (e.g., weather.py)",
-                    value="./server/weather.py"
+                    value="../server/business-recorder.py"
                 )
             with gr.Column(scale=1):
                 connect_btn = gr.Button("Connect")

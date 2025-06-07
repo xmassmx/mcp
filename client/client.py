@@ -11,7 +11,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from groq import Groq
 
-
+from prompt import system_prompt
 from dotenv import load_dotenv
 
 load_dotenv()  # load environment variables from .env
@@ -94,7 +94,8 @@ class MCPClient:
         # Add system prompt
         model_messages.append({
             "role": "system",
-            "content": "You are an assistant that can respond to the user queries and if required, use the available tools to help answer questions."
+            # "content": "You are an assistant that can respond to the user queries and if required, use the available tools to help answer questions."
+            "content": system_prompt
         })
         for msg in history:
             if isinstance(msg, ChatMessage):
@@ -186,16 +187,17 @@ class MCPClient:
                     }
                 })
 
+
                 result_content = result.content
                 if isinstance(result_content, list):
-                    result_content = "\n".join(str(item) for item in result_content)
+                    result_content = "\n".join(str(item.text) for item in result_content)
                 # Add the tool response to the conversation
                 model_messages.append(
                     {
                         "tool_call_id": tool_call.id, 
                         "role": "tool", # Indicates this message is from tool use
                         "name": function_name,
-                        "content": result.content[0].text,
+                        "content": result_content,
                     }
                 )
             # Make a second API call with the updated conversation
