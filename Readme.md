@@ -1,5 +1,5 @@
 ---
-title: Test
+title: Business Recorder Mcp
 emoji: 🐠
 colorFrom: red
 colorTo: red
