@@ -11,7 +11,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from groq import Groq
 
-from prompt import system_prompt
+from .prompt import system_prompt
 from dotenv import load_dotenv
 
 load_dotenv()  # load environment variables from .env

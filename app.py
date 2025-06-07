@@ -1,6 +1,6 @@
 import gradio as gr
 from gradio.components.chatbot import ChatMessage
-from client import MCPClient
+from client.client import MCPClient
 import os
 
 client = MCPClient()
