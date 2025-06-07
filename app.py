@@ -8,6 +8,7 @@ client = MCPClient()
 def gradio_interface():
     with gr.Blocks(title="MCP Client") as demo:
         gr.Markdown("# MCP Assistant")
+        gr.Markdown("Client - llama3-70b-8192 [Groq]. Server - Business Recorder RSS")
         
         with gr.Row(equal_height=True):
             with gr.Column(scale=4):
@@ -45,7 +46,7 @@ def gradio_interface():
         with gr.Row(equal_height=True):
             msg = gr.Textbox(
                 label="Your Question",
-                placeholder="Ask about weather or alerts (e.g., What's the weather in New York?)",
+                placeholder="Ask about the news",
                 scale=4
             )
             clear_btn = gr.Button("Clear Chat", scale=1)
