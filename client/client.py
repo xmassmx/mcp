@@ -15,7 +15,7 @@ from .prompt import system_prompt
 from dotenv import load_dotenv
 
 load_dotenv()  # load environment variables from .env
-MODEL = os.getenv("MODEL")
+MODEL = os.getenv("MODEL", "llama3-70b-8192")
 
 print(MODEL)
 loop = asyncio.new_event_loop()

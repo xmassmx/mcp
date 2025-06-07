@@ -22,17 +22,17 @@ def gradio_interface():
         
         api_key_status = gr.Textbox(label="API Key Status", interactive=False, value=client.get_api_key_status())
         
-        with gr.Row(equal_height=True):
-            with gr.Column(scale=4):
-                server_path = gr.Textbox(
-                    label="Server Script Path",
-                    placeholder="Enter path to server script (e.g., weather.py)",
-                    value="../server/business-recorder.py"
-                )
-            with gr.Column(scale=1):
-                connect_btn = gr.Button("Connect")
+        # with gr.Row(equal_height=True):
+        #     with gr.Column(scale=4):
+        #         server_path = gr.Textbox(
+        #             label="Server Script Path",
+        #             placeholder="Enter path to server script (e.g., weather.py)",
+        #             value="./server/business-recorder.py"
+        #         )
+        #     with gr.Column(scale=1):
+        #         connect_btn = gr.Button("Connect")
         
-        status = gr.Textbox(label="Connection Status", interactive=False)
+        # status = gr.Textbox(label="Connection Status", interactive=False)
         
         chatbot = gr.Chatbot(
             value=[], 
@@ -51,7 +51,8 @@ def gradio_interface():
             clear_btn = gr.Button("Clear Chat", scale=1)
         
         set_api_key_btn.click(client.set_api_key, inputs=api_key, outputs=api_key_status)
-        connect_btn.click(client.connect, inputs=server_path, outputs=status)
+        client.connect(server_script_path="./server/business-recorder.py")
+        # connect_btn.click(client.connect, inputs=server_path, outputs=status)
         msg.submit(client.process_message, [msg, chatbot], [chatbot, msg])
         clear_btn.click(lambda: [], None, chatbot)
         
